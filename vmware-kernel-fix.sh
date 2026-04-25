@@ -1,12 +1,11 @@
 #!/bin/bash
 # VMware 17.5.x + Linux 6.17 fix
-# Kullanım: bash vmware-kernel-fix.sh
 
 set -e
 WORKDIR=/tmp/vmware-fix-$(date +%s)
 mkdir -p $WORKDIR && cd $WORKDIR
 
-# vmmon
+echo "[*] vmmon modülü yamalanıyor ve paketleniyor..."
 tar -xf /usr/lib/vmware/modules/source/vmmon.tar
 cp -r vmmon-only/include/* vmmon-only/shared/ 2>/dev/null || true
 
@@ -26,24 +25,22 @@ MKEOF
 
 sed -i "s|PLACEHOLDER|$WORKDIR/vmmon-only|g" vmmon-only/Makefile.kernel
 
-/usr/bin/make VM_KBUILD=yes \
-  -C /lib/modules/$(uname -r)/build/include/.. \
-  M=$WORKDIR/vmmon-only \
-  SRCROOT=$WORKDIR/vmmon-only/. \
-  MODULEBUILDDIR= modules
+# DÜZELTME: vmmon manuel derlenmek yerine yeniden paketlenip kaynağa atılıyor.
+tar -cf vmmon-fixed.tar vmmon-only
+sudo cp vmmon-fixed.tar /usr/lib/vmware/modules/source/vmmon.tar
 
-sudo cp vmmon-only/vmmon.ko /lib/modules/$(uname -r)/kernel/drivers/misc/
-
-# vmnet
+echo "[*] vmnet modülü yamalanıyor ve paketleniyor..."
 tar -xf /usr/lib/vmware/modules/source/vmnet.tar
 sed -i 's/read_lock(&dev_base_lock)/rcu_read_lock()/g' vmnet-only/vmnetInt.h
 sed -i 's/read_unlock(&dev_base_lock)/rcu_read_unlock()/g' vmnet-only/vmnetInt.h
 
 tar -cf vmnet-fixed.tar vmnet-only
 sudo cp vmnet-fixed.tar /usr/lib/vmware/modules/source/vmnet.tar
+
+echo "[*] vmware-modconfig ile tüm modüller derleniyor..."
 sudo vmware-modconfig --console --install-all
 
 sudo depmod -a
 sudo modprobe vmmon
 sudo modprobe vmnet
-echo "✅ Tamam!"
+echo "✅ Kurulum Tamamlandı!"
